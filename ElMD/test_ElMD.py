@@ -1,6 +1,6 @@
 """Basic tests taken from docs (assuming that docs are correct)."""
 from numpy.testing import assert_almost_equal, assert_allclose
-from ElMD import ElMD
+from ElMD.ElMD import ElMD
 
 
 def test_ElMD():
@@ -28,7 +28,7 @@ def test_magpie():
 
 
 def test_featurizingDict():
-    featurizingDict = ElMD().periodic_tab
+    featurizingDict = ElMD(metric="magpie").periodic_tab
     check = [
         2.0,
         22.98976928,
@@ -52,4 +52,4 @@ def test_featurizingDict():
         0.0,
         229.0,
     ]
-    assert_allclose(featurizingDict["magpie"]["Na"], check)
+    assert_allclose(featurizingDict["Na"], check)
