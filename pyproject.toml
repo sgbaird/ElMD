@@ -27,10 +27,10 @@ dependencies = [
           ]
 
 keywords = [
-    'ChemInformatics',
-    'Materials Science',
-    'Machine Learning',
-    'Materials Representation'
+    "ChemInformatics",
+    "Materials Science",
+    "Machine Learning",
+    "Materials Representation"
     ]
 
 [project.urls]
