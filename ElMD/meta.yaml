@@ -1,5 +1,4 @@
-{% set name = "ElMD" %}
-{% set version = "0.4.11" %}
+{% set name = "ElMD" %}{% set version = "0.4.11" %}
 
 
 package:
@@ -7,8 +6,8 @@ package:
   version: {{ version }}
 
 source:
-  url: https://pypi.io/packages/source/{{ name[0] }}/{{ name }}/ElMD-{{ version }}.tar.gz
-  sha256: f9d7e63b940027b107d83e6fa3accc6212083a3484dcdacb3c2a9f683b339160
+  url: https://github.com/sgbaird/ElMD/archive/v0.4.11.tar.gz
+  sha256: bcd1d7034465ad8eca61967edab5340474496ef3f507ade769b5c32c1a4edb66
 
 build:
   number: 0
@@ -17,15 +16,11 @@ build:
 
 requirements:
   host:
-    - pip
+    - python
     - flit
-    - python
+    - pip
   run:
-    - numba
-    - numpy
     - python
-    - scipy
-    - setuptools
 
 test:
   imports:
@@ -36,8 +31,6 @@ test:
     - pip
 
 about:
-  home: https://github.com/lrcfmd/ElMD/
-  summary: An implementation of the Element movers distance for chemical similarity of ionic compositions
   license: GPL-3.0
   license_file: LICENSE
 
