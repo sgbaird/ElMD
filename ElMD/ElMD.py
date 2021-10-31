@@ -1,4 +1,4 @@
-'''
+"""
 The Element Movers Distance is an application of the Wasserstein metric between
 two compositional vectors
 
@@ -26,13 +26,16 @@ __license__ = "GPL"
 __version__ = "0.4.11"
 __maintainer__ = "Cameron Hargreaves"
 
-'''
-import json 
+"""
+import json
 import re
-import os 
-import pkg_resources
+import os
 
-from site import getsitepackages
+# import pkg_resources
+from importlib.resources import open_text
+from . import el_lookup
+
+# from site import getsitepackages
 from collections import Counter
 from copy import deepcopy
 
@@ -41,8 +44,10 @@ from scipy.spatial.distance import squareform
 from numba import njit
 from functools import lru_cache
 
+
 def main():
-    import time 
+    import time
+
     ts = time.time()
     x = ElMD("Li0.167 Al0.167 H0.667", metric="mat2vec")
     y = ElMD("NaCl", metric="mat2vec")
@@ -58,35 +63,22 @@ def main():
     print(x.elmd(y))
     print(y.elmd(x))
 
-
     print(y.elmd(z))
     print(x)
     print(x.feature_vector)
     print(time.time() - ts)
+
 
 @lru_cache(maxsize=8)
 def _get_periodic_tab(metric):
     """
     Load periodic data from the python site_packages/ElMD folder
     """
-    paths = getsitepackages()
+    data = open_text(el_lookup, f"{metric}.json")
+    ElementDict = json.loads(data.read())
 
-    python_package_path = ""
-
-    for p in paths:
-        try:
-            if "ElMD" in os.listdir(p):
-                python_package_path = p
-        except:
-            pass 
-
-    # python_package_path = "" # For local debugging
-
-    with open(os.path.join(python_package_path, "ElMD", "el_lookup", f"{metric}.json"), 'r') as j:
-        ElementDict = json.loads(j.read())
-            
     return ElementDict
-    
+
 
 def elmd(comp1, comp2, metric="mod_petti"):
     if isinstance(comp1, str):
@@ -95,7 +87,9 @@ def elmd(comp1, comp2, metric="mod_petti"):
     elif isinstance(comp1, ElMD):
         source_demands = comp1.ratio_vector
     else:
-        raise TypeError(f"First composition must be either a string or ElMD object, you input an object of type {type(comp1)}")
+        raise TypeError(
+            f"First composition must be either a string or ElMD object, you input an object of type {type(comp1)}"
+        )
 
     if isinstance(comp2, str):
         comp2 = ElMD(comp2, metric=metric)
@@ -104,46 +98,68 @@ def elmd(comp1, comp2, metric="mod_petti"):
         sink_demands = comp2.ratio_vector
 
     else:
-        raise TypeError(f"Second composition must be either a string or ElMD object, you input an object of type {type(comp2)}")
+        raise TypeError(
+            f"Second composition must be either a string or ElMD object, you input an object of type {type(comp2)}"
+        )
 
-    if isinstance(comp1, ElMD) and isinstance(comp2, ElMD) and comp1.metric != comp2.metric:
-        raise TypeError(f"Both ElMD objects must use the same metric. comp1 has metric={comp1.metric} and comp2 has metric={comp2.metric}")
+    if (
+        isinstance(comp1, ElMD)
+        and isinstance(comp2, ElMD)
+        and comp1.metric != comp2.metric
+    ):
+        raise TypeError(
+            f"Both ElMD objects must use the same metric. comp1 has metric={comp1.metric} and comp2 has metric={comp2.metric}"
+        )
 
-    source_labels = np.array([comp1.periodic_tab[comp1.lookup[i]] for i in np.where(source_demands > 0)[0]], dtype=float)
-    sink_labels = np.array([comp2.periodic_tab[comp2.lookup[i]] for i in np.where(sink_demands > 0)[0]], dtype=float)
-    
+    source_labels = np.array(
+        [comp1.periodic_tab[comp1.lookup[i]] for i in np.where(source_demands > 0)[0]],
+        dtype=float,
+    )
+    sink_labels = np.array(
+        [comp2.periodic_tab[comp2.lookup[i]] for i in np.where(sink_demands > 0)[0]],
+        dtype=float,
+    )
+
     source_demands = source_demands[np.where(source_demands > 0)[0]]
     sink_demands = sink_demands[np.where(sink_demands > 0)[0]]
 
     # Perform a floating point conversion to ints to ensure algorithm terminates
-    network_costs = np.array([[np.linalg.norm(x - y) * 1000000 for x in sink_labels] for y in source_labels], dtype=np.int64) 
+    network_costs = np.array(
+        [[np.linalg.norm(x - y) * 1000000 for x in sink_labels] for y in source_labels],
+        dtype=np.int64,
+    )
 
     return EMD(source_demands, sink_demands, network_costs)
 
 
 def EMD(source_demands, sink_demands, network_costs):
-    '''
-    A numba compiled EMD function from the network simplex algorithm to compare 
+    """
+    A numba compiled EMD function from the network simplex algorithm to compare
     two distributions with a given distance matrix between node labels
-    '''
+    """
 
     if len(network_costs.shape) == 2:
         n, m = network_costs.shape
 
         if len(source_demands) != n or len(sink_demands) != m:
-            raise ValueError(f"Shape of 2D distance matrix must have n rows and m columns where n is the number of source_demands, and m is the number of sink demands. You have n={len(source_demands)} source_demands and m={len(sink_demands)} sink_demands, but your distance matrix is [{n}, {m}].")
+            raise ValueError(
+                f"Shape of 2D distance matrix must have n rows and m columns where n is the number of source_demands, and m is the number of sink demands. You have n={len(source_demands)} source_demands and m={len(sink_demands)} sink_demands, but your distance matrix is [{n}, {m}]."
+            )
 
         network_costs = network_costs.ravel()
 
     else:
-        raise ValueError("Must input a 2D distance matrix between the elements of both distributions")
+        raise ValueError(
+            "Must input a 2D distance matrix between the elements of both distributions"
+        )
 
     return network_simplex(source_demands, sink_demands, network_costs)
 
-class ElMD():
-    ATOM_REGEX = '([A-Z][a-z]*)(\d*\.?\d*[-+]?x?)'
-    OPENERS = '({['
-    CLOSERS = ')}]'
+
+class ElMD:
+    ATOM_REGEX = "([A-Z][a-z]*)(\d*\.?\d*[-+]?x?)"
+    OPENERS = "({["
+    CLOSERS = ")}]"
 
     # As the current optimization solver only takes in ints we must multiply
     # all floats to capture the decimal places
@@ -154,7 +170,7 @@ class ElMD():
         self.formula = formula.strip()
         self.strict_parsing = strict_parsing
         self.x = x
-        
+
         self.periodic_tab = _get_periodic_tab(metric)
         self.petti_lookup = _get_periodic_tab("mod_petti")
         self.lookup = self._gen_lookup()
@@ -169,12 +185,12 @@ class ElMD():
 
         self.feature_vector = self._gen_feature_vector()
 
-    def elmd(self, comp2 = None, comp1 = None):
-        '''
+    def elmd(self, comp2=None, comp1=None):
+        """
         Calculate the minimal cost flow between two weighted vectors using the
         network simplex method. This is overloaded to accept a range of input
         types.
-        '''
+        """
         if comp1 is None:
             comp1 = self
 
@@ -184,11 +200,11 @@ class ElMD():
         return elmd(comp1, comp2, metric=self.metric)
 
     def _gen_ratio_vector(self):
-        '''
-        Create a numpy array from a composition dictionary. 
-        '''
+        """
+        Create a numpy array from a composition dictionary.
+        """
         comp = self.normed_composition
-        
+
         if isinstance(comp, str):
             comp = self._parse_formula(comp)
             comp = self._normalise_composition(comp)
@@ -203,14 +219,18 @@ class ElMD():
         indices = np.array(comp_labels, dtype=np.int64)
         ratios = np.array(comp_ratios, dtype=np.float64)
 
-        numeric = np.zeros(shape=max([x for x in self.petti_lookup.values() if isinstance(x, int)]) + 1, dtype=np.float64)
+        numeric = np.zeros(
+            shape=max([x for x in self.petti_lookup.values() if isinstance(x, int)])
+            + 1,
+            dtype=np.float64,
+        )
         numeric[indices] = ratios
 
         return numeric
 
     def _gen_petti_vector(self):
         comp = self.normed_composition
-        
+
         if isinstance(comp, str):
             comp = self._parse_formula(comp)
             comp = self._normalise_composition(comp)
@@ -229,15 +249,15 @@ class ElMD():
         numeric[indices] = ratios
 
         return numeric
-        
+
     def _gen_feature_vector(self):
         """
-        Perform the dot product between the ratio vector and its elemental representation. 
+        Perform the dot product between the ratio vector and its elemental representation.
         """
         # If we only have an integer representation, return the vector as is
         if type(self.periodic_tab["H"]) is int:
             return self.ratio_vector
-        
+
         n = int(len(self.normed_composition))
         m = len(self.periodic_tab["H"])
         numeric = np.zeros(shape=(n, m), dtype=float)
@@ -248,18 +268,22 @@ class ElMD():
             try:
                 numeric[i] = self.periodic_tab[k]
             except:
-                print(f"Failed to process {self.formula} with {self.metric} due to element {k}, discarding this element.")
+                print(
+                    f"Failed to process {self.formula} with {self.metric} due to element {k}, discarding this element."
+                )
 
         element_features = np.nan_to_num(numeric)
 
-        weighted_vector = np.dot(self.ratio_vector[np.where(self.ratio_vector > 0)[0]], element_features)
+        weighted_vector = np.dot(
+            self.ratio_vector[np.where(self.ratio_vector > 0)[0]], element_features
+        )
 
         return weighted_vector
 
     def _gen_pretty(self):
-        '''
+        """
         Return a normalized formula string from the vector format
-        '''
+        """
         inds = np.where(self.petti_vector != 0.0)[0]
         pretty_form = ""
 
@@ -267,16 +291,20 @@ class ElMD():
             if self.petti_vector[ind] == 1:
                 pretty_form = pretty_form + f"{self.lookup[ind]}"
             else:
-                pretty_form = pretty_form + f"{self.lookup[ind]}{self.petti_vector[ind]:.3f}".strip('0') + ' '
+                pretty_form = (
+                    pretty_form
+                    + f"{self.lookup[ind]}{self.petti_vector[ind]:.3f}".strip("0")
+                    + " "
+                )
 
         return pretty_form.strip()
 
     def _gen_lookup(self):
         lookup = {}
-        
+
         for i, (k, v) in enumerate(self.petti_lookup.items()):
-            lookup[k] = v 
-            lookup[int(v)] = k 
+            lookup[k] = v
+            lookup[int(v)] = k
 
         return lookup
 
@@ -284,7 +312,7 @@ class ElMD():
         """Check if all sort of brackets come in pairs."""
         # Very naive check, just here because you always need some input checking
         c = Counter(formula)
-        return c['['] == c[']'] and c['{'] == c['}'] and c['('] == c[')']
+        return c["["] == c["]"] and c["{"] == c["}"] and c["("] == c[")"]
 
     def _dictify(self, tuples):
         """Transform tuples of tuples to a dict of atoms."""
@@ -293,23 +321,28 @@ class ElMD():
         for atom, n in tuples:
             if atom[-1].lower() == "x":
                 if self.strict_parsing:
-                    raise ValueError(f"The element {atom} in the composition {self.formula} is undefined. Set strict_parsing=False to read x=1.")
+                    raise ValueError(
+                        f"The element {atom} in the composition {self.formula} is undefined. Set strict_parsing=False to read x=1."
+                    )
                 else:
                     atom = atom[:-1]
                     n = self.x
-            
+
             if not isinstance(n, (int, float)) and "x" in n and "-" in n:
-                n = float(str.split(n, "-")[0]) - self.x 
-                if n < 0: n = 0
+                n = float(str.split(n, "-")[0]) - self.x
+                if n < 0:
+                    n = 0
 
             if not isinstance(n, (int, float)) and "x" in n and "+" in n:
-                n = float(str.split(n, "+")[0]) + self.x 
-            
+                n = float(str.split(n, "+")[0]) + self.x
+
             try:
                 if atom in self.lookup:
                     res[atom] += float(n or 1)
                 elif self.strict_parsing:
-                    raise ValueError(f"The element {atom} in the composition {self.formula} is not in the lookup dictionary for {self.metric}")
+                    raise ValueError(
+                        f"The element {atom} in the composition {self.formula} is not in the lookup dictionary for {self.metric}"
+                    )
 
             except KeyError:
                 res[atom] = float(n or 1)
@@ -320,8 +353,11 @@ class ElMD():
         return res
 
     def _fuse(self, mol1, mol2, w=1):
-        """ Fuse 2 dicts representing molecules. Return a new dict. """
-        return {atom: (mol1.get(atom, 0) + mol2.get(atom, 0)) * w for atom in set(mol1) | set(mol2)}
+        """Fuse 2 dicts representing molecules. Return a new dict."""
+        return {
+            atom: (mol1.get(atom, 0) + mol2.get(atom, 0)) * w
+            for atom in set(mol1) | set(mol2)
+        }
 
     def _parse(self, formula):
         """
@@ -339,18 +375,18 @@ class ElMD():
 
             if token in self.CLOSERS:
                 # Check for an index for this part
-                m = re.match('\d+\.*\d*|\.\d*', formula[i+1:])
+                m = re.match("\d+\.*\d*|\.\d*", formula[i + 1 :])
                 if m:
                     weight = float(m.group(0))
                     i += len(m.group(0))
                 else:
                     weight = 1
 
-                submol = self._dictify(re.findall(self.ATOM_REGEX, ''.join(q)))
+                submol = self._dictify(re.findall(self.ATOM_REGEX, "".join(q)))
                 return self._fuse(mol, submol, weight), i
 
             elif token in self.OPENERS:
-                submol, l = self._parse(formula[i+1:])
+                submol, l = self._parse(formula[i + 1 :])
                 mol = self._fuse(mol, submol)
                 # skip the already read submol
                 i += l + 1
@@ -360,7 +396,10 @@ class ElMD():
             i += 1
 
         # Fuse in all that's left at base level
-        return self._fuse(mol, self._dictify(re.findall(self.ATOM_REGEX, ''.join(q)))), i
+        return (
+            self._fuse(mol, self._dictify(re.findall(self.ATOM_REGEX, "".join(q)))),
+            i,
+        )
 
     def _parse_formula(self, formula):
         """Parse the formula and return a dict with occurences of each atom."""
@@ -370,13 +409,13 @@ class ElMD():
         return self._parse(formula)[0]
 
     def _normalise_composition(self, input_comp):
-        """ Sum up the numbers in our counter to get total atom count """
+        """Sum up the numbers in our counter to get total atom count"""
         composition = deepcopy(input_comp)
         # check it has been processed
         if isinstance(composition, str):
             composition = self._parse_formula(composition)
 
-        atom_count =  sum(composition.values(), 0.0)
+        atom_count = sum(composition.values(), 0.0)
 
         for atom in composition:
             composition[atom] /= atom_count
@@ -384,12 +423,14 @@ class ElMD():
         return composition
 
     def _get_atomic_num(self, element):
-        """ Return atomic number from element """
+        """Return atomic number from element"""
         try:
             np.array(self.periodic_tab[element])
         except Exception as e:
             if self.strict_parsing:
-                raise Exception(f"Element, {element} not found in lookup dict {self.metric}, in composition {self.formula}")
+                raise Exception(
+                    f"Element, {element} not found in lookup dict {self.metric}, in composition {self.formula}"
+                )
             else:
                 return 0
 
@@ -406,12 +447,14 @@ class ElMD():
 
         except:
             if self.strict_parsing:
-                raise KeyError(f"One of the elements in {self.composition} is not in the {self.metric} dictionary. Try a different representation or use strict_parsing=False")
+                raise KeyError(
+                    f"One of the elements in {self.composition} is not in the {self.metric} dictionary. Try a different representation or use strict_parsing=False"
+                )
             else:
                 return -1
 
     def _return_positions(self, composition):
-        """ Return a dictionary of associated positions for each element """
+        """Return a dictionary of associated positions for each element"""
         element_pos = {}
 
         for element in composition:
@@ -430,7 +473,7 @@ class ElMD():
 
     def __ne__(self, other):
         return self.pretty_formula != other.pretty_formula
-    
+
     def __lt__(self, other):
         return self.elmd("H") < other.elmd("H")
 
@@ -438,7 +481,7 @@ class ElMD():
         return self.elmd("H") > other.elmd("H")
 
 
-'''
+"""
 This is an implementation of the network simplex algorithm for computing the
 minimal flow atomic similarity distance between two compounds
 
@@ -446,12 +489,12 @@ Copyright (C) 2019  Cameron Hargreaves
 ported from networkx to numba/numpy, Copyright (C) 2010 Loïc Séguin-C.
 All rights reserved.
 BSD license.
-'''
+"""
+
 
 @njit(cache=True)
 def reduced_cost(i, costs, potentials, tails, heads, flows):
-    """Return the reduced cost of an edge i.
-    """
+    """Return the reduced cost of an edge i."""
     c = costs[i] - potentials[tails[i]] + potentials[heads[i]]
 
     if flows[i] == 0:
@@ -459,18 +502,18 @@ def reduced_cost(i, costs, potentials, tails, heads, flows):
     else:
         return -c
 
+
 @njit(cache=True)
 def find_entering_edges(e, f, tails, heads, costs, potentials, flows):
-    """Yield entering edges until none can be found.
-    """
+    """Yield entering edges until none can be found."""
     # Entering edges are found by combining Dantzig's rule and Bland's
     # rule. The edges are cyclically grouped into blocks of size B. Within
     # each block, Dantzig's rule is applied to find an entering edge. The
     # blocks to search is determined following Bland's rule.
 
-    B = np.int64(np.ceil(np.sqrt(e))) # block size
+    B = np.int64(np.ceil(np.sqrt(e)))  # block size
 
-    M = (e + B - 1) // B    # number of blocks needed to cover all edges
+    M = (e + B - 1) // B  # number of blocks needed to cover all edges
     m = 0
 
     while m < M:
@@ -515,6 +558,7 @@ def find_entering_edges(e, f, tails, heads, costs, potentials, flows):
     # All edges have nonnegative reduced costs. The flow is optimal.
     return -1, -1, -1, -1
 
+
 @njit(cache=True)
 def find_apex(p, q, size, parent):
     """Find the lowest common ancestor of nodes p and q in the spanning
@@ -539,6 +583,7 @@ def find_apex(p, q, size, parent):
             else:
                 return p
 
+
 @njit(cache=True)
 def trace_path(p, w, edge, parent):
     """Return the nodes and edges on the path from node p to its ancestor
@@ -553,6 +598,7 @@ def trace_path(p, w, edge, parent):
         cycle_nodes.append(p)
 
     return cycle_nodes, cycle_edges
+
 
 @njit(cache=True)
 def find_cycle(i, p, q, size, edge, parent):
@@ -579,6 +625,7 @@ def find_cycle(i, p, q, size, edge, parent):
 
     return cycle_nodes, cycle_edges
 
+
 @njit(cache=True)
 def residual_capacity(i, p, capac, flows, tails):
     """Return the residual capacity of an edge i in the direction away
@@ -589,6 +636,7 @@ def residual_capacity(i, p, capac, flows, tails):
 
     else:
         return flows[np.int64(i)]
+
 
 @njit(cache=True)
 def find_leaving_edge(cycle_nodes, cycle_edges, capac, flows, tails, heads):
@@ -612,20 +660,20 @@ def find_leaving_edge(cycle_nodes, cycle_edges, capac, flows, tails, heads):
     t = heads[np.int64(j)] if tails[np.int64(j)] == s else tails[np.int64(j)]
     return j, s, t
 
+
 @njit(cache=True)
 def augment_flow(cycle_nodes, cycle_edges, f, tails, flows):
-    """Augment f units of flow along a cycle representing Wn with cycle_edges.
-    """
+    """Augment f units of flow along a cycle representing Wn with cycle_edges."""
     for i, p in zip(cycle_edges, cycle_nodes):
         if tails[int(i)] == np.int64(p):
             flows[int(i)] += f
         else:
             flows[int(i)] -= f
 
+
 @njit(cache=True)
 def trace_subtree(p, last, next):
-    """Yield the nodes in the subtree rooted at a node p.
-    """
+    """Yield the nodes in the subtree rooted at a node p."""
     tree = []
     tree.append(p)
 
@@ -636,10 +684,10 @@ def trace_subtree(p, last, next):
 
     return np.array(tree, dtype=np.int64)
 
+
 @njit(cache=True)
 def remove_edge(s, t, size, prev, last, next, parent, edge):
-    """Remove an edge (s, t) where parent[t] == s from the spanning tree.
-    """
+    """Remove an edge (s, t) where parent[t] == s from the spanning tree."""
     size_t = size[t]
     prev_t = prev[t]
     last_t = last[t]
@@ -660,6 +708,7 @@ def remove_edge(s, t, size, prev, last, next, parent, edge):
         if last[s] == last_t:
             last[s] = prev_t
         s = parent[s]
+
 
 @njit(cache=True)
 def make_root(q, parent, size, last, prev, next, edge):
@@ -709,6 +758,7 @@ def make_root(q, parent, size, last, prev, next, edge):
         prev[q] = last_p
         last[q] = last_p
 
+
 @njit(cache=True)
 def add_edge(i, p, q, next, prev, last, size, parent, edge):
     """Add an edge (p, q) to the spanning tree where q is the root of a
@@ -735,6 +785,7 @@ def add_edge(i, p, q, next, prev, last, size, parent, edge):
             last[p] = last_q
         p = parent[p]
 
+
 @njit(cache=True)
 def update_potentials(i, p, q, heads, potentials, costs, last, next):
     """Update the potentials of the nodes in the subtree rooted at a node
@@ -749,9 +800,10 @@ def update_potentials(i, p, q, heads, potentials, costs, last, next):
     for q in tree:
         potentials[q] += d
 
+
 @njit(cache=True)
 def network_simplex(source_demands, sink_demands, network_costs):
-    '''
+    """
     This is a port of the network simplex algorithm implented by Loïc Séguin-C
     for the networkx package to allow acceleration via the numba package
 
@@ -768,7 +820,7 @@ def network_simplex(source_demands, sink_demands, network_costs):
            Enhancement of spanning tree labeling procedures for network
            optimization.
            INFOR 17(1):16--34. 1979.
-    '''
+    """
     # Constant used throughout for conversions from floating point to integer
     fp_multiplier = np.array([1000000], dtype=np.int64)
 
@@ -788,7 +840,7 @@ def network_simplex(source_demands, sink_demands, network_costs):
     # FP conversion error correction
     source_sum = np.sum(source_d_int)
     sink_sum = np.sum(sink_d_int)
-    if  source_sum < sink_sum:
+    if source_sum < sink_sum:
         source_ind = np.argmax(source_d_int)
         source_d_int[source_ind] += sink_sum - source_sum
 
@@ -800,8 +852,17 @@ def network_simplex(source_demands, sink_demands, network_costs):
     demands = np.concatenate((-source_d_int, sink_d_int)).astype(np.int64)
 
     # Create fully connected arcs between all sources and sinks
-    conn_tails = np.array([i for i, x in enumerate(sources) for j, y in enumerate(sinks)], dtype=np.int64)
-    conn_heads = np.array([j + sources.shape[0] for i, x in enumerate(sources) for j, y in enumerate(sinks)], dtype=np.int64)
+    conn_tails = np.array(
+        [i for i, x in enumerate(sources) for j, y in enumerate(sinks)], dtype=np.int64
+    )
+    conn_heads = np.array(
+        [
+            j + sources.shape[0]
+            for i, x in enumerate(sources)
+            for j, y in enumerate(sinks)
+        ],
+        dtype=np.int64,
+    )
 
     # Add arcs to and from the dummy node
     dummy_tails = []
@@ -817,10 +878,22 @@ def network_simplex(source_demands, sink_demands, network_costs):
 
     # Concatenate these all together
     tails = np.concatenate((conn_tails, np.array(dummy_heads).T)).astype(np.int64)
-    heads = np.concatenate((conn_heads, np.array(dummy_heads).T)).astype(np.int64)  # edge targets
+    heads = np.concatenate((conn_heads, np.array(dummy_heads).T)).astype(
+        np.int64
+    )  # edge targets
 
     # Create costs and capacities for the arcs between nodes
-    network_capac = np.array([np.array([source_demands[i], sink_demands[j]]).min() for i, x in np.ndenumerate(sources) for j, y in np.ndenumerate(sinks)], dtype=np.float64) * fp_multiplier
+    network_capac = (
+        np.array(
+            [
+                np.array([source_demands[i], sink_demands[j]]).min()
+                for i, x in np.ndenumerate(sources)
+                for j, y in np.ndenumerate(sinks)
+            ],
+            dtype=np.float64,
+        )
+        * fp_multiplier
+    )
 
     # TODO finish?
     # If there is only one node on either side we can return capacity and costs
@@ -831,27 +904,44 @@ def network_simplex(source_demands, sink_demands, network_costs):
     # inf_arr = (np.sum(network_capac.astype(np.int64)), np.sum(np.absolute(network_costs)), np.max(np.absolute(demands)))
 
     # Set a suitably high integer for infinity
-    faux_inf = 3 * np.max(np.array((np.sum(network_capac.astype(np.int64)), np.sum(np.absolute(network_costs)), np.max(np.absolute(demands))), dtype=np.int64))
+    faux_inf = 3 * np.max(
+        np.array(
+            (
+                np.sum(network_capac.astype(np.int64)),
+                np.sum(np.absolute(network_costs)),
+                np.max(np.absolute(demands)),
+            ),
+            dtype=np.int64,
+        )
+    )
 
     # Add the costs and capacities to the dummy nodes
-    costs = np.concatenate((network_costs, np.ones(nodes.shape[0]) * faux_inf)).astype(np.int64)
-    capac = np.concatenate((network_capac, np.ones(nodes.shape[0]) * fp_multiplier)).astype(np.int64)
+    costs = np.concatenate((network_costs, np.ones(nodes.shape[0]) * faux_inf)).astype(
+        np.int64
+    )
+    capac = np.concatenate(
+        (network_capac, np.ones(nodes.shape[0]) * fp_multiplier)
+    ).astype(np.int64)
 
     # Construct the initial spanning tree.
     e = conn_tails.shape[0]
     n = nodes.shape[0]
 
     # Initialise zero flow in the connected arcs, and full flow to the dummy
-    flows = np.concatenate((np.zeros(e), np.array([abs(d) for d in demands]))).astype(np.int64)
+    flows = np.concatenate((np.zeros(e), np.array([abs(d) for d in demands]))).astype(
+        np.int64
+    )
 
     # General arrays for the spanning tree
     potentials = np.array([faux_inf if d <= 0 else -faux_inf for d in demands]).T
     parent = np.concatenate((np.ones(n) * -1, np.array([-2]))).astype(np.int64)
-    edge = np.arange(e, e+n).astype(np.int64)
+    edge = np.arange(e, e + n).astype(np.int64)
     size = np.concatenate((np.ones(n), np.array([n + 1]))).astype(np.int64)
     next = np.concatenate((np.arange(1, n), np.array([-1, 0]))).astype(np.int64)
-    prev = np.arange(-1, n)          # previous nodes in depth-first thread
-    last = np.concatenate((np.arange(n), np.array([n - 1]))).astype(np.int64)     # last descendants in depth-first thread
+    prev = np.arange(-1, n)  # previous nodes in depth-first thread
+    last = np.concatenate((np.arange(n), np.array([n - 1]))).astype(
+        np.int64
+    )  # last descendants in depth-first thread
 
     ###########################################################################
     # Main Pivot loop
@@ -861,15 +951,23 @@ def network_simplex(source_demands, sink_demands, network_costs):
 
     while True:
         i, p, q, f = find_entering_edges(e, f, tails, heads, costs, potentials, flows)
-        if p == -1: # If no entering edges then the optimal score is found
+        if p == -1:  # If no entering edges then the optimal score is found
             break
 
         cycle_nodes, cycle_edges = find_cycle(i, p, q, size, edge, parent)
-        j, s, t = find_leaving_edge(cycle_nodes, cycle_edges, capac, flows, tails, heads)
-        augment_flow(cycle_nodes, cycle_edges, residual_capacity(j, s, capac, flows, tails), tails, flows)
+        j, s, t = find_leaving_edge(
+            cycle_nodes, cycle_edges, capac, flows, tails, heads
+        )
+        augment_flow(
+            cycle_nodes,
+            cycle_edges,
+            residual_capacity(j, s, capac, flows, tails),
+            tails,
+            flows,
+        )
 
         if i != j:  # Do nothing more if the entering edge is the same as the
-                    # the leaving edge.
+            # the leaving edge.
             if parent[t] != s:
                 # Ensure that s is the parent of t.
                 s, t = t, s
@@ -891,12 +989,11 @@ def network_simplex(source_demands, sink_demands, network_costs):
     for arc_ind, flow in np.ndenumerate(final_flows):
         flow_cost += flow * edge_costs[arc_ind]
 
-    final = flow_cost / fp_multiplier 
-    final = final / fp_multiplier 
+    final = flow_cost / fp_multiplier
+    final = final / fp_multiplier
 
     return final[0]
 
-    
 
 if __name__ == "__main__":
     main()
