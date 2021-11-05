@@ -1,5 +1,6 @@
 """Basic tests taken from docs (assuming that docs are correct)."""
 from numpy.testing import assert_almost_equal, assert_allclose
+
 from ElMD.ElMD_ import ElMD
 
 
@@ -53,3 +54,11 @@ def test_featurizingDict():
         229.0,
     ]
     assert_allclose(featurizingDict["Na"], check)
+
+
+if __name__ == "__main__":
+    test_ElMD()
+    test_atomic()
+    test_magpie_sc()
+    test_magpie()
+    test_featurizingDict()
