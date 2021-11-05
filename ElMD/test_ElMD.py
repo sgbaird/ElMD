@@ -1,6 +1,6 @@
 """Basic tests taken from docs (assuming that docs are correct)."""
 from numpy.testing import assert_almost_equal, assert_allclose
-from ElMD.ElMD import ElMD
+from ElMD.ElMD_ import ElMD
 
 
 def test_ElMD():
