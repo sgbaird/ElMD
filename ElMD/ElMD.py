@@ -49,8 +49,8 @@ def main():
     import time
 
     ts = time.time()
-    x = ElMD("Li0.167 Al0.167 H0.667", metric="mat2vec")
-    y = ElMD("NaCl", metric="mat2vec")
+    x = ElMD("LiCl", metric="mod_petti")
+    y = ElMD("NaCl", metric="mod_petti")
     # z = ElMD("Zr3AlN", metric="atomic")
 
     print(x.elmd(y))
@@ -125,7 +125,7 @@ def elmd(comp1, comp2, metric="mod_petti"):
 
     # Perform a floating point conversion to ints to ensure algorithm terminates
     network_costs = np.array(
-        [[np.linalg.norm(x - y) * 1000000 for x in sink_labels] for y in source_labels],
+        [[np.linalg.norm(x - y) for x in sink_labels] for y in source_labels],
         dtype=np.int64,
     )
 
@@ -840,6 +840,7 @@ def network_simplex(source_demands, sink_demands, network_costs):
     # FP conversion error correction
     source_sum = np.sum(source_d_int)
     sink_sum = np.sum(sink_d_int)
+
     if source_sum < sink_sum:
         source_ind = np.argmax(source_d_int)
         source_d_int[source_ind] += sink_sum - source_sum
@@ -914,6 +915,8 @@ def network_simplex(source_demands, sink_demands, network_costs):
             dtype=np.int64,
         )
     )
+
+    network_costs = network_costs * fp_multiplier
 
     # Add the costs and capacities to the dummy nodes
     costs = np.concatenate((network_costs, np.ones(nodes.shape[0]) * faux_inf)).astype(
