@@ -19,7 +19,7 @@ pip install ElMD
 For simple usage initiate an object with its compositional formula
 
 ```python
-> from ElMD import ElMD
+> from ElMD.ElMD import ElMD
 > x = ElMD("CaTiO3")
 ```
 
